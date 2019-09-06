@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>本地环回</title>
+</head>
+
+<body>
+  <video id="localVideo" playsinline autoplay></video>
+  <video id="remoteVideo" playsinline autoplay></video>
+  <div>
+    <button id="videoButton">获取视频流</button>
+    <button id="connectButton">建立连接</button>
+  </div>
+  <script>
+    const getById = id => document.getElementById(id);
+    const localVideo = getById('localVideo');
+    const remoteVideo = getById('remoteVideo');
+    const videoButton = getById('videoButton');
+    const connectButton = getById('connectButton');
+
+    let localStream = null;
+    let remoteStream = null;
+    videoButton.onclick = (function () {
+      let pending = false;
+      return function () {
+        if (pending || localStream) {
+          return;
+        }
+        pending = true;
+        navigator.mediaDevices.getUserMedia({
+          video: { width: 400, height: 300 },
+        }).then(stream => {
+          localVideo.srcObject = localStream = stream;
+          pending = false;
+        }).catch(e => {
+          console.error(e);
+          pending = false;
+        });
+      };
+    })();
+
+    let localPeerConnection = null;
+    let remotePeerConnection = null;
+    connectButton.onclick = function () {
+      if (!localStream || localPeerConnection) {
+        return;
+      }
+      localPeerConnection = new RTCPeerConnection(null);
+      remotePeerConnection = new RTCPeerConnection(null);
+      localPeerConnection.onicecandidate = function (event) {
+        const iceCandidate = event.candidate;
+        if (iceCandidate) {
+          remotePeerConnection.addIceCandidate(iceCandidate);
+        }
+      };
+      remotePeerConnection.onicecandidate = function (event) {
+        const iceCandidate = event.candidate;
+        if (iceCandidate) {
+          localPeerConnection.addIceCandidate(iceCandidate);
+        }
+      };
+      if ('ontrack' in remotePeerConnection) {
+        remotePeerConnection.ontrack = function (event) {
+          remoteStream = event.streams[0];
+          remoteVideo.srcObject = remoteStream;
+        };
+      } else {
+        remotePeerConnection.onaddstream = function (event) {
+          remoteStream = event.stream;
+          remoteVideo.srcObject = remoteStream;
+        };
+      }
+
+      if ('addTrack' in localPeerConnection) {
+        localStream.getTracks().forEach(track => {
+          localPeerConnection.addTrack(track, localStream);
+        });
+      } else {
+        localPeerConnection.addStream(localStream);
+      }
+
+      localPeerConnection.createOffer().then(offerSdp => {
+        localPeerConnection.setLocalDescription(offerSdp);
+        remotePeerConnection.setRemoteDescription(offerSdp);
+        return remotePeerConnection.createAnswer();
+      }).then(answerSdp => {
+        remotePeerConnection.setLocalDescription(answerSdp);
+        localPeerConnection.setRemoteDescription(answerSdp);
+      });
+    };
+  </script>
+</body>
+
+</html>
