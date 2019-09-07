@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>手动交换信令 - offer</title>
+</head>
+
+<body>
+  <canvas id="canvas" width="400" height="300"></canvas>
+  <video id="remoteVideo" width="400" height="300" playsinline autoplay></video>
+  <script>
+    const getById = id => document.getElementById(id);
+    const canvas = getById('canvas');
+    const remoteVideo = getById('remoteVideo');
+
+    (function () {
+      const ctx = canvas.getContext('2d');
+      ctx.font = (canvas.width / 20) + 'px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      setInterval(() => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'black';
+        ctx.fillText(new Date().toLocaleString(), canvas.width / 2, canvas.height / 2);
+      }, 1000);
+    })();
+
+    let peerConnection = new RTCPeerConnection(null);
+    let localSdp;
+    peerConnection.onicecandidate = function (event) {
+      console.log('-------onIcecandidate-------');
+      const iceCandidate = event.candidate;
+      console.log(iceCandidate);
+      if (iceCandidate) {
+        console.log(JSON.stringify(iceCandidate));
+      }
+    };
+    peerConnection.onaddstream = function (event) {
+      console.log('-------onAddstream-------');
+      console.log(event.stream);
+      remoteVideo.srcObject = event.stream;
+    };
+
+    peerConnection.addStream(canvas.captureStream(30));
+
+    function createOffer() {
+      peerConnection.createOffer().then(offerSdp => {
+        console.log('-------createOffer-------');
+        console.log(offerSdp);
+        console.log(JSON.stringify(offerSdp));
+        localSdp = offerSdp;
+      });
+    }
+
+    function setLocalSdp() {
+      if (!localSdp) return;
+      peerConnection.setLocalDescription(localSdp);
+    }
+
+    function acceptAnswer(answerSdp) {
+      const remoteSdp = new RTCSessionDescription(answerSdp);
+      peerConnection.setRemoteDescription(remoteSdp);
+    }
+
+    function addCandidate(candidate) {
+      const iceCandidate = new RTCIceCandidate(candidate);
+      peerConnection.addIceCandidate(iceCandidate);
+    }
+  </script>
+</body>
+
+</html>

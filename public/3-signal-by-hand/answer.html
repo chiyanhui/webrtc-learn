@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>手动交换信令 - answer</title>
+</head>
+
+<body>
+  <canvas id="canvas" width="400" height="300"></canvas>
+  <video id="remoteVideo" width="400" height="300" playsinline autoplay></video>
+  <script>
+    const getById = id => document.getElementById(id);
+    const canvas = getById('canvas');
+    const remoteVideo = getById('remoteVideo');
+
+    (function () {
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = 'white';
+      function strokeLine(x1, y1, x2, y2) {
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+      setInterval(() => {
+        const now = new Date();
+        const w = canvas.width / 2, h = canvas.height / 2, r = Math.min(w, h) * 0.75;
+        const s = now.getSeconds(), min = now.getMinutes(), hour = now.getHours() % 12;
+        let rad;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(w, h, r, 0, 2 * Math.PI);
+        ctx.stroke();
+        for (var i = 0; i < 12; i++) {
+          const x = i % 3 ? 0.9 : 0.8;
+          strokeLine(
+            w + Math.sin(Math.PI / 6 * i) * r, h - Math.cos(Math.PI / 6 * i) * r,
+            w + Math.sin(Math.PI / 6 * i) * r * x, h - Math.cos(Math.PI / 6 * i) * r * x
+          );
+        }
+        ctx.strokeStyle = 'red';
+        rad = s / 30 * Math.PI;
+        strokeLine(w, h, w + Math.sin(rad) * r * 0.85, h - Math.cos(rad) * r * 0.85);
+        ctx.strokeStyle = 'green';
+        ctx.lineWidth = 2;
+        rad = (min * 60 + s) / 1800 * Math.PI;
+        strokeLine(w, h, w + Math.sin(rad) * r * 0.75, h - Math.cos(rad) * r * 0.75);
+        ctx.strokeStyle = 'blue';
+        ctx.lineWidth = 3;
+        rad = (h * 3600 + min * 60 + s) / 43200 * Math.PI;
+        strokeLine(w, h, w + Math.sin(rad) * r * 0.65, h - Math.cos(rad) * r * 0.65);
+      }, 1000);
+    })();
+
+    let peerConnection = new RTCPeerConnection(null);
+    let localSdp;
+    peerConnection.onicecandidate = function (event) {
+      console.log('-------onIcecandidate-------');
+      const iceCandidate = event.candidate;
+      console.log(iceCandidate);
+      if (iceCandidate) {
+        console.log(JSON.stringify(iceCandidate));
+      }
+    };
+    peerConnection.onaddstream = function (event) {
+      console.log('-------onAddstream-------');
+      console.log(event.stream);
+      remoteVideo.srcObject = event.stream;
+    };
+
+    peerConnection.addStream(canvas.captureStream(30));
+
+    function acceptOffer(offerSdp) {
+      const remoteSdp = new RTCSessionDescription(offerSdp);
+      peerConnection.setRemoteDescription(remoteSdp);
+    };
+
+    function createAnswer() {
+      peerConnection.createAnswer().then(answerSdp => {
+        console.log('-------createAnswer-------');
+        console.log(answerSdp);
+        console.log(JSON.stringify(answerSdp));
+        localSdp = answerSdp;
+      });
+    }
+
+    function setLocalSdp() {
+      if (!localSdp) return;
+      peerConnection.setLocalDescription(localSdp);
+    }
+
+    function addCandidate(candidate) {
+      const iceCandidate = new RTCIceCandidate(candidate);
+      peerConnection.addIceCandidate(iceCandidate);
+    }
+  </script>
+</body>
+
+</html>
