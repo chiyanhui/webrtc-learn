@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>本地环回</title>
+  <style>
+    #offerSide, #answerSide {
+      border: solid 2px #00f;
+      margin: 10px;
+    }
+    canvas, video {
+      border: solid 1px #ddd;
+      margin: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <button id="startButton">建立连接</button>
+  <div id="offerSide">
+    <canvas id="offerCanvas" width="400" height="300"></canvas>
+    <video id="offerRemoteVideo" width="400" height="300" playsinline autoplay></video>
+  </div>
+  <div id="answerSide">
+    <canvas id="answerCanvas" width="400" height="300"></canvas>
+    <video id="answerRemoteVideo" width="400" height="300" playsinline autoplay></video>
+  </div>
+  <script>
+    const getById = id => document.getElementById(id);
+    const startButton = getById('startButton');
+    const offerCanvas = getById('offerCanvas');
+    const answerCanvas = getById('answerCanvas');
+    const offerRemoteVideo = getById('offerRemoteVideo');
+    const answerRemoteVideo = getById('answerRemoteVideo');
+    let offerPeerConnection = null;
+    let answerPeerConnection = null;
+    (function () {
+      const canvas = offerCanvas;
+      const ctx = canvas.getContext('2d');
+      ctx.font = (canvas.width / 20) + 'px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      setInterval(() => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'black';
+        ctx.fillText(new Date().toLocaleString(), canvas.width / 2, canvas.height / 2);
+      }, 1000);
+    })();
+    (function () {
+      const canvas = answerCanvas;
+      const ctx = canvas.getContext('2d');
+      let r = 0, d = 2;
+      function draw() {
+        requestAnimationFrame(draw);
+        r += d;
+        if (d > 0 && r >= 100 || d < 0 && r <= 0) {
+          d = -d;
+        }
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'red';
+        ctx.beginPath();
+        ctx.arc(canvas.width / 2, canvas.height / 2, r * 0.01 * canvas.height * 0.3, 0, 2*Math.PI);
+        ctx.fill();
+      }
+      draw();
+    })();
+
+    startButton.onclick = function() {
+      startButton.onclick = null;
+      offerPeerConnection = new RTCPeerConnection(null);
+      answerPeerConnection = new RTCPeerConnection(null);
+      offerPeerConnection.onicecandidate = function (event) {
+        const iceCandidate = event.candidate;
+        if (iceCandidate) {
+          answerPeerConnection.addIceCandidate(iceCandidate);
+        }
+      };
+      answerPeerConnection.onicecandidate = function (event) {
+        const iceCandidate = event.candidate;
+        if (iceCandidate) {
+          offerPeerConnection.addIceCandidate(iceCandidate);
+        }
+      };
+      offerPeerConnection.onaddstream = function (event) {
+        offerRemoteVideo.srcObject = event.stream;
+      };
+      answerPeerConnection.onaddstream = function (event) {
+        answerRemoteVideo.srcObject = event.stream;
+      };
+
+      offerPeerConnection.addStream(offerCanvas.captureStream(30));
+
+      offerPeerConnection.createOffer().then(offerSdp => {
+        offerPeerConnection.setLocalDescription(offerSdp);
+        answerPeerConnection.setRemoteDescription(offerSdp);
+        answerPeerConnection.addStream(answerCanvas.captureStream(60));
+        return answerPeerConnection.createAnswer();
+      }).then(answerSdp => {
+        answerPeerConnection.setLocalDescription(answerSdp);
+        offerPeerConnection.setRemoteDescription(answerSdp);
+      });
+    }
+  </script>
+</body>
+
+</html>
